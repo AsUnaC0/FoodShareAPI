@@ -25,7 +25,6 @@ router.post('/deletefood', foodHandler.deleteFood)
 router.post('/likefood', foodHandler.likeFood)
 
 // 用户对该食物贴子取消点赞
-
 router.post('/unlikefood', foodHandler.unlikeFood)
 
 // 用户对该食物贴子收藏

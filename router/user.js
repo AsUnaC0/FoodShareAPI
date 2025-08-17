@@ -6,6 +6,7 @@ const userHandler = require('../router_handler/userHandler')
 
 // 导入验证数据的中间件
 const expressJoi = require('@escook/express-joi')
+
 // 导入验证规则对象
 const { reg_reg_schema, reg_login_schema } = require('../data_validation/userCheck')
 
