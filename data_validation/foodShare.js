@@ -9,7 +9,9 @@ const location = joi.string().required()
 // 食物图片的验证规则
 const foodimg = joi.string().required()
 // 分类的验证规则
-const category = joi.string().required()
+const categoryid = joi.required()
+// 标签的验证规则
+const tags = joi.string()
 
 
 exports.add_food_schema = {
@@ -18,6 +20,7 @@ exports.add_food_schema = {
         description,
         location,
         foodimg,
-        category
+        categoryid,
+        tags
     }
 }

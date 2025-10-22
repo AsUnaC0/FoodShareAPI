@@ -1,6 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const config = require('../config');
 
 // 配置multer存储
 const storage = multer.diskStorage({
@@ -74,13 +75,13 @@ exports.upload = (req, res) => {
             size: req.file.size,
             mimetype: req.file.mimetype,
             // 生成可访问的URL
-            url: `/images/foodimages/${req.file.filename}`
+            url: `${config.server.baseUrl}/images/foodimages/${req.file.filename}`
         };
 
         // 返回成功响应
-        res.json({
+        return res.status(200).json({
             code: 200,
-            message: '美食图片上传成功',
+            message: '图片上传成功',
             data: fileInfo
         });
     });

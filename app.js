@@ -15,6 +15,9 @@ app.use(cors())
 
 app.use(express.urlencoded({ extended: false }))
 
+// 配置静态文件服务，让前端可以访问 images 文件夹中的图片
+app.use('/images', express.static('images'))
+
 // 导入并注册用户路由模块
 const userRouter = require('./router/user')
 app.use('/api', userRouter)
@@ -32,6 +35,18 @@ app.use('/food', foodRouter)
 const fooddetailRouter = require('./router/fooddetail')
 app.use('/fooddetail', fooddetailRouter)
 
+// 导入并注册标签路由模块
+const tagRouter = require('./router/tag')
+app.use('/tag', tagRouter)
+
+// 导入并注册管理员端路由模块
+const adminRouter = require('./router/admin')
+app.use('/admin', adminRouter)
+
+// 启动定时任务
+const { startAllTasks } = require('./tasks/index')
+startAllTasks()
+
 // 错误中间件
 app.use(function (err, req, res, next) {
     // 参数校验失败
@@ -45,6 +60,6 @@ app.use(function (err, req, res, next) {
     res.send({ status: 1, message: err.message })
 })
 
-app.listen(3007, function () {
-    console.log('api server running at http://127.0.0.1:3007')
+app.listen(config.server.port, function () {
+    console.log(`api server running at ${config.server.baseUrl}`)
 })

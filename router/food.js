@@ -12,6 +12,15 @@ const { add_food_schema } = require('../data_validation/foodShare')
 // 获取美食列表 不需要验证token
 router.post('/foodlist', foodHandler.getFoodList)
 
+// 按时间段获取美食列表
+router.get('/foodlistbytime', foodHandler.getFoodListByTime)
+
+// 个性化推荐食物列表
+router.post('/foodlistbyuser', foodHandler.getFoodListByUser)
+
+// 热门推荐食物列表
+router.get('/hotfoodlist', foodHandler.getHotFoodList)
+
 // 美食图片的发送
 router.post('/upload', uploadHandler.upload)
 
@@ -38,5 +47,8 @@ router.post('/commentfood', foodHandler.commentfood)
 
 // 用户对该贴子进行评分
 router.post('/ratefood', foodHandler.ratefood)
+
+// 用户搜索美食
+router.post('/searchfood', foodHandler.searchFood)
 
 module.exports = router

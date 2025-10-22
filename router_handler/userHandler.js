@@ -23,8 +23,9 @@ exports.regUser = (req, res) => {
         }
         // 对用户的密码,进行 bcrype 加密，返回值是加密之后的密码字符串
         userinfo.password = bcrypt.hashSync(userinfo.password, 10)
+        const avatarUrl = `${config.server.baseUrl}/images/userAvatar/defaultboy.png`;
         const sql = `insert into users (account,password,email,nickname,avatar) values (?,?,?,?,?)`
-        db.query(sql, [userinfo.account, userinfo.password, userinfo.email, '普通用户', 'fakeavatar'], function (err, results) {
+        db.query(sql, [userinfo.account, userinfo.password, userinfo.email, '普通用户', avatarUrl], function (err, results) {
             // SQL 语句执行失败
             if (err) {
                 return res.send({ status: 1, message: err.message })
@@ -71,4 +72,31 @@ exports.login = (req, res) => {
                 token: 'Bearer ' + tokenStr,
             })
     })
+}
+
+// 用户关注
+exports.follow = (req, res) => {
+    const [followid, action] = [req.body.followid, req.body.action]
+    const userid = req.auth.id
+    if (!followid || !action) {
+        return res.send({ status: 1, message: '参数错误' })
+    }
+    if (action === 'follow') {
+        const sql = `insert into follows (userid,followid) values (?,?)`
+        db.query(sql, [userid, followid], (err, results) => {
+            if (err) {
+                return res.send({ status: 1, message: err.message })
+            }
+            res.send({ status: 0, message: '关注成功' })
+        })
+    }
+    if (action === 'unfollow') {
+        const sql = `delete from follows where userid=? and followid=?`
+        db.query(sql, [userid, followid], (err, results) => {
+            if (err) {
+                return res.send({ status: 1, message: err.message })
+            }
+            res.send({ status: 0, message: '取消关注成功' })
+        })
+    }
 }

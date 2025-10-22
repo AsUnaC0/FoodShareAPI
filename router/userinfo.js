@@ -15,6 +15,9 @@ router.get('/userinfo', userinfoHandler.getUserInfo)
 // 更新用户的基本信息
 router.post('/userinfo', expressJoi(update_userinfo_schema), userinfoHandler.updateUserInfo)
 
+// 更新用户标签
+router.post('/mytags', userinfoHandler.updateMyTags)
+
 // 更新用户头像
 router.post('/update/avatar', expressJoi(update_avatar_schema), userinfoHandler.updateAvatar)
 
