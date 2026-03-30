@@ -1,8 +1,8 @@
 const db = require('../db/index');
-const fs = require('fs').promises;
 const path = require('path');
 const tagOperations = require('../utils/tagOperations');
 const hotFoodRankingPath = path.join(__dirname, '../router_handler/hotfoodRanking.json');
+const { checkComment } = require('../utils/commentCheck');
 
 const timeTagsMap = {
     breakfast: ['早餐', '面包'],  // 早餐相关标签
@@ -88,43 +88,76 @@ exports.getFoodListByTime = (req, res) => {
         });
 }
 
-// 个性化化推荐食物列表
+// 个性化推荐食物列表
 exports.getFoodListByUser = async (req, res) => {
-    const userid = req.auth.userid;
+    let { history } = req.body;
 
-    const history = req.body.history || false;
+    let historyArray = JSON.parse(history);
 
-    const tagIds = [];
+    let foodIds = new Set();
+    let tagIds = new Set();
 
-    if (history) {
-        await Promise.all(
-            history.map(async item => {
-                const tagId = await tagOperations.getTagIdByName(item);
-                tagIds.push(tagId);
-            })
-        );
-    }
-
-    const sql = `SELECT tagid FROM user_tags WHERE userid=?`;
-    db.query(sql, userid, async (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        results.forEach(item => {
-            if (item.tagid != null) {
-                tagIds.push(item.tagid);
+    try {
+        // 根据标签名找标签ID(历史记录)
+        for (const tag of historyArray) {
+            try {
+                // 确保 tag 是字符串且不为空
+                if (typeof tag === 'string' && tag.trim() !== '') {
+                    const tagId = await tagOperations.getTagIdByName(tag.trim());
+                    tagIds.add(tagId.tag_id);
+                }
+            } catch (error) {
+                console.error('查询标签失败:', tag, error.message);
+                // 继续处理其他标签，不中断整个流程
             }
+        }
+
+        // 根据用户ID获取用户喜好标签
+        const userTagIds = await new Promise((resolve, reject) => {
+            const sql = `SELECT tagid FROM user_tags WHERE userid=?`;
+            db.query(sql, [req.auth.userid], (err, results) => {
+                if (err) reject(err);
+                else resolve(results.map(v => v.tagid));
+            });
         });
-        if (tagIds.length === 0) return res.send({ status: 1, message: '暂无数据' });
-        const foodIds = tagIds.filter(tagId => tagId != null).map(tagId => tagOperations.getFoodIdsByTagId(tagId));
-        const foodDetails = await Promise.all(foodIds).then(id => {
-            return getFoodDetailsByIds(id.flat());
-        });
+
+        // 合并历史标签和用户喜好标签
+        userTagIds.forEach(tagId => tagIds.add(tagId));
+
+        // 根据标签ID找食物ID
+        for (const tagId of tagIds) {
+            try {
+                const foodIdArray = await tagOperations.getFoodIdsByTagId(tagId);
+                foodIdArray.forEach(id => foodIds.add(id));
+            } catch (error) {
+                console.error('根据标签ID查询食物失败:', tagId, error.message);
+            }
+        }
+
+        // 获取食物详情
+        if (foodIds.size === 0) {
+            return res.send({
+                status: 0,
+                message: '暂无推荐食物',
+                data: []
+            });
+        }
+
+        const foodDetails = await getFoodDetailsByIds(Array.from(foodIds));
 
         res.send({
             status: 0,
             message: '获取成功',
             data: foodDetails
         });
-    });
+
+    } catch (error) {
+        console.error('个性化推荐失败:', error);
+        res.send({
+            status: 1,
+            message: '获取推荐失败: ' + error.message
+        });
+    }
 }
 
 // 热门美食推荐
@@ -195,7 +228,6 @@ exports.addFood = (req, res) => {
             // 处理每个标签，收集成功和失败的信息
             for (const tag of tagsArray) {
                 try {
-                    // const tagId = await getTagIdByName(tag);
                     const tagId = await tagOperations.getTagIdByName(tag);
                     const sqlTag = `INSERT INTO food_tags (foodid,tag_id) VALUES (?,?)`;
 
@@ -230,30 +262,79 @@ exports.addFood = (req, res) => {
 
 
 // 用户删除贴子
-exports.deleteFood = (req, res) => {
-    const sql = `DELETE FROM foods WHERE foodid=?`;
+exports.deleteFood = async (req, res) => {
     const { foodid } = req.body;
-    db.query(sql, foodid, (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        if (results.affectedRows !== 1) return res.send({ status: 1, message: '删除失败' });
+
+    try {
+        // 按顺序删除相关数据，避免外键约束错误
+        const deleteOperations = [
+            { sql: 'DELETE FROM comments WHERE foodid = ?', name: '评论' },
+            { sql: 'DELETE FROM likes WHERE foodid = ?', name: '点赞' },
+            { sql: 'DELETE FROM favorites WHERE foodid = ?', name: '收藏' },
+            { sql: 'DELETE FROM food_tags WHERE foodid = ?', name: '食物标签关联' }
+        ];
+
+        // 执行删除相关数据
+        for (const operation of deleteOperations) {
+            try {
+                const result = await new Promise((resolve, reject) => {
+                    db.query(operation.sql, [foodid], (err, results) => {
+                        if (err) reject(err);
+                        else resolve(results);
+                    });
+                });
+            } catch (error) {
+                console.log(`删除${operation.name}失败，但继续执行:`, error.message);
+                // 继续执行，因为可能某些表不存在或没有相关数据
+            }
+        }
+
+        // 最后删除食物本身
+        const result = await new Promise((resolve, reject) => {
+            const sql = 'DELETE FROM foods WHERE foodid = ?';
+            db.query(sql, [foodid], (err, results) => {
+                if (err) reject(err);
+                else resolve(results);
+            });
+        });
+
+        if (result.affectedRows === 0) {
+            return res.send({ status: 1, message: '食物不存在或已被删除' });
+        }
+
+        console.log('删除食物成功');
         res.send({
             status: 0,
             message: '删除成功'
-        })
-    })
+        });
+
+    } catch (error) {
+        console.error('删除食物失败:', error);
+        res.send({
+            status: 1,
+            message: '删除失败: ' + error.message
+        });
+    }
 }
 
 // 用户点赞食物贴子
 exports.likeFood = (req, res) => {
-    const sql = `INSERT INTO likes (userid,foodid) VALUES (?,?)`;
     const { userid, foodid } = req.body;
+
+    if (!userid) return res.send({ status: 1, message: '未登录' });
+    if (!foodid) return res.send({ status: 1, message: '缺少 foodid' });
+
+    const sql = 'INSERT IGNORE INTO likes (userid, foodid) VALUES (?, ?)';
     db.query(sql, [userid, foodid], (err, results) => {
         if (err) return res.send({ status: 1, message: err.message });
-        if (results.affectedRows !== 1) return res.send({ status: 1, message: '点赞失败' });
+        if (results.affectedRows === 0) {
+            // 已存在相同记录，说明用户已点赞
+            return res.send({ status: 1, message: '您已点赞' });
+        }
         res.send({
             status: 0,
             message: '点赞成功'
-        })
+        });
     })
 }
 
@@ -314,10 +395,15 @@ exports.unfavoritefood = (req, res) => {
 }
 
 // 用户对该食物贴子的文本评论
-exports.commentfood = (req, res) => {
-    const sql = `INSERT INTO comments (userid,foodid,content) VALUES (?,?,?)`;
-    const { userid, foodid, content } = req.body;
-    db.query(sql, [userid, foodid, content], (err, results) => {
+exports.commentfood = async (req, res) => {
+    const sql = `INSERT INTO comments (userid,foodid,content,comment_status) VALUES (?,?,?,?)`;
+    const { foodid, content } = req.body;
+
+    if (content.trim() === '') return res.send({ status: 1, message: '评论内容不能为空' });
+
+    const state = await checkComment(req.auth.userid);
+
+    db.query(sql, [req.auth.userid, foodid, content, state], (err, results) => {
         if (err) return res.send({ status: 1, message: err.message });
         if (results.affectedRows !== 1) return res.send({ status: 1, message: '评论失败' });
         res.send({
@@ -325,53 +411,6 @@ exports.commentfood = (req, res) => {
             message: '评论成功'
         })
     })
-}
-
-// 评论检测(该用户在一分钟内对同一个食物贴子进行多次评论，将该贴子下的该用户评论标记为异常评论)
-exports.commentCheck = (req, res) => {
-    const { userid, foodid } = req.body;
-    const sql = `SELECT * FROM comments WHERE userid=? AND foodid=? ORDER BY comment_time DESC LIMIT 1`;
-    db.query(sql, [userid, foodid], (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        if (results.length === 0) return res.send({ status: 1, message: '未找到该评论信息' });
-        const time = moment(results[0].comment_time).add(1, 'minute');
-        if (moment().isBefore(time)) {
-            const sqlUpdate = `UPDATE comments SET comment_status=? WHERE commentid=?`;
-            db.query(sqlUpdate, ['异常', results[0].commentid], (err, results) => {
-                if (err) return res.send({ status: 1, message: err.message });
-                if (results.affectedRows !== 1) return res.send({ status: 1, message: '评论标记失败' });
-                res.send({
-                    status: 0,
-                    message: '评论标记异常成功'
-                })
-            });
-        }
-    })
-}
-
-
-// 用户对该食物贴子的星级评论
-exports.ratefood = (req, res) => {
-    let sql = `SELECT * FROM rating WHERE userid=? AND foodid=?`;
-    const { userid, foodid, rating } = req.body;
-    db.query(sql, [userid, foodid], (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        if (results.length !== 0) return res.send({ status: 1, message: '已评分' });
-
-        sql = `INSERT INTO rating (userid,foodid,rating) VALUES (?,?,?)`;
-        db.query(sql, [userid, foodid, rating], (err, results) => {
-            if (err) return res.send({ status: 1, message: err.message });
-            if (results.affectedRows !== 1) return res.send({ status: 1, message: '评分失败' });
-            res.send({
-                status: 0,
-                message: '评分成功',
-                data: rating
-            })
-        })
-    })
-
-
-
 }
 
 // 用户搜索美食信息

@@ -73,30 +73,3 @@ exports.login = (req, res) => {
             })
     })
 }
-
-// 用户关注
-exports.follow = (req, res) => {
-    const [followid, action] = [req.body.followid, req.body.action]
-    const userid = req.auth.id
-    if (!followid || !action) {
-        return res.send({ status: 1, message: '参数错误' })
-    }
-    if (action === 'follow') {
-        const sql = `insert into follows (userid,followid) values (?,?)`
-        db.query(sql, [userid, followid], (err, results) => {
-            if (err) {
-                return res.send({ status: 1, message: err.message })
-            }
-            res.send({ status: 0, message: '关注成功' })
-        })
-    }
-    if (action === 'unfollow') {
-        const sql = `delete from follows where userid=? and followid=?`
-        db.query(sql, [userid, followid], (err, results) => {
-            if (err) {
-                return res.send({ status: 1, message: err.message })
-            }
-            res.send({ status: 0, message: '取消关注成功' })
-        })
-    }
-}

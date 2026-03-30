@@ -33,6 +33,15 @@ router.get('/favoritefood', userinfoHandler.getFavoriteFood)
 // 获取用户发布的食物信息
 router.get('/foodlist', userinfoHandler.getFoodList)
 
+// 用户关注
+router.post('/follow', userinfoHandler.follow)
+
+// 用户取消关注
+router.post('/unfollow', userinfoHandler.unfollow)
+
+// 用户认证成为商家
+router.post('/merchant', userinfoHandler.merchant)
+
 
 // 向外共享路由对象
 module.exports = router

@@ -45,7 +45,7 @@ const startHotFoodRankingTask = () => {
     console.log('热门食物排行榜定时任务已注册');
 
     // 测试用：每分钟执行一次，正式环境改为 '0 2 * * *'（每天凌晨2点）
-    cron.schedule('* * * * *', updateHotFoodRanking);
+    cron.schedule('* 2 * * *', updateHotFoodRanking);
 
 };
 

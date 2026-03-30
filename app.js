@@ -8,15 +8,15 @@ const config = require('./config')
 // 解析token的中间件
 const { expressjwt } = require('express-jwt')
 
+// 配置静态文件服务，让前端可以访问 images 文件夹中的图片
+app.use('/images', express.static('images'))
+
 // 使用 .unless({ path: [/^\/api\//] }) 指定哪些接口不需要进行 Token 的身份认证
-app.use(expressjwt({ secret: config.jwtSecretKey, algorithms: ['HS256'] }).unless({ path: [/^\/api\//, /^\/food\/foodlist$/, /^\/fooddetail\//] }))
+app.use(expressjwt({ secret: config.jwtSecretKey, algorithms: ['HS256'] }).unless({ path: [/^\/api\//, /^\/food\/foodlist$/, /^\/fooddetail\//, /^\/admin\//] }))
 
 app.use(cors())
 
 app.use(express.urlencoded({ extended: false }))
-
-// 配置静态文件服务，让前端可以访问 images 文件夹中的图片
-app.use('/images', express.static('images'))
 
 // 导入并注册用户路由模块
 const userRouter = require('./router/user')
@@ -53,8 +53,16 @@ app.use(function (err, req, res, next) {
     if (err instanceof joi.ValidationError)
         return res.send({ status: 1, message: err.message })
     // 捕获身份认证失败的错误
-    if (err.name === 'UnauthorizedError') {
-        return res.send({ status: 1, message: '身份认证失败！' })
+    if (err && err.name === 'UnauthorizedError') {
+        // token 过期（内部 err.inner 可能包含 TokenExpiredError）
+        if (err.inner && err.inner.name === 'TokenExpiredError') {
+            return res.status(401).json({ status: 1, message: 'Token 已过期，请重新登录' });
+        }
+        // 未提供 token / 无效 token
+        if (err.code === 'credentials_required' || /credentials_required/.test(err.message)) {
+            return res.status(401).json({ status: 1, message: '未提供 token' });
+        }
+        return res.status(401).json({ status: 1, message: '无效的 token' });
     }
     // // 未知错误
     res.send({ status: 1, message: err.message })

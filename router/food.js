@@ -45,9 +45,6 @@ router.post('/unfavoritefood', foodHandler.unfavoritefood)
 // 用户对该食物贴子进行评论
 router.post('/commentfood', foodHandler.commentfood)
 
-// 用户对该贴子进行评分
-router.post('/ratefood', foodHandler.ratefood)
-
 // 用户搜索美食
 router.post('/searchfood', foodHandler.searchFood)
 

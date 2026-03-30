@@ -14,7 +14,5 @@ const { reg_reg_schema, reg_login_schema } = require('../data_validation/userChe
 router.post('/reguser', expressJoi(reg_reg_schema), userHandler.regUser)
 // 登录
 router.post('/login', expressJoi(reg_login_schema), userHandler.login)
-// 用户关注
-router.post('/follow', userHandler.follow)
 
 module.exports = router

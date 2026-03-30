@@ -6,6 +6,59 @@ const fs = require('fs');
 const tagOperations = require('../utils/tagOperations');
 const config = require('../config');
 
+// 配置multer存储
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, path.join(__dirname, '../images/userAvatar'));
+    },
+    filename: function (req, file, cb) {
+        cb(null, Date.now() + path.extname(file.originalname));
+    }
+});
+
+// 文件过滤：只允许图片类型
+const fileFilter = (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+    } else {
+        cb(new Error('只允许上传JPEG、jpg、PNG格式的图片'), false);
+    }
+};
+
+// 初始化头像上传multer
+const upload = multer({
+    storage: storage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 限制5MB
+    }
+});
+
+// 配置商家认证文件上传
+const merchantStorage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        const uploadDir = path.join(__dirname, '../images/licenseImage');
+        // 确保目录存在
+        if (!fs.existsSync(uploadDir)) {
+            fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+        const licensenumber = req.body.licensenumber || 'license';
+        cb(null, licensenumber + '_' + Date.now() + path.extname(file.originalname));
+    }
+});
+
+const merchantUpload = multer({
+    storage: merchantStorage,
+    fileFilter: fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024 // 限制5MB
+    }
+});
+
 // 获取登录用户基本信息的处理函数
 // 注意：req 对象上的 auth 属性，是 Token 解析成功，express-jwt 中间件帮我们挂载上去的
 exports.getUserInfo = (req, res) => {
@@ -126,35 +179,6 @@ exports.updateMyTags = (req, res) => {
     }
 }
 
-// 配置multer存储
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, '../images/userAvatar'));
-    },
-    filename: function (req, file, cb) {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
-
-// 文件过滤：只允许图片类型
-const fileFilter = (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png'];
-    if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-    } else {
-        cb(new Error('只允许上传JPEG、PNG格式的图片'), false);
-    }
-};
-
-// 初始化multer
-const upload = multer({
-    storage: storage,
-    fileFilter: fileFilter,
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 限制5MB
-    }
-});
-
 // 更新用户头像
 exports.updateAvatar = (req, res) => {
     const sql = `update users set avatar=? where userid=?`
@@ -227,9 +251,24 @@ exports.getLikeFood = (req, res) => {
     const sql = `select * from likes where userid=?`
     db.query(sql, req.auth.userid, (err, results) => {
         if (err) return res.send({ status: 1, message: err.message })
+
         const foodIds = results.map(v => v.foodid)
-        const sql = `select * from foods where foodid in (?)`
-        db.query(sql, [foodIds], (err, results) => {
+        console.log('用户点赞的食物ID:', foodIds);
+
+        // 如果没有点赞的食物，直接返回空数组
+        if (foodIds.length === 0) {
+            return res.send({
+                status: 0,
+                message: '获取成功',
+                data: []
+            });
+        }
+
+        // 构建正确的 IN 查询
+        const placeholders = foodIds.map(() => '?').join(',');
+        const foodSql = `select * from foods where foodid in (${placeholders})`;
+
+        db.query(foodSql, foodIds, (err, results) => {
             if (err) return res.send({ status: 1, message: err.message })
             res.send({
                 status: 0,
@@ -258,7 +297,6 @@ exports.getFavoriteFood = (req, res) => {
     })
 }
 
-
 // 获取用户发布的食物信息
 exports.getFoodList = (req, res) => {
     const sql = `select * from foods where userid=?`
@@ -270,4 +308,94 @@ exports.getFoodList = (req, res) => {
             data: results
         })
     })
+}
+
+// 用户关注
+exports.follow = (req, res) => {
+    const sql = `SELECT * FROM follows WHERE userid=? AND followedid=?`
+    db.query(sql, [req.auth.userid, req.body.followedid], (err, results) => {
+        if (err) {
+            return res.send({ status: 1, message: err.message })
+        }
+        if (results.length > 0) {
+            return res.send({ status: 1, message: '用户已关注！' })
+        }
+        const sql = `INSERT INTO follows (userid,followedid) VALUES (?,?)`
+        db.query(sql, [req.auth.userid, req.body.followedid], (err, results) => {
+            if (err) {
+                return res.send({ status: 1, message: err.message })
+            }
+            if (results.affectedRows !== 1) {
+                return res.send({ status: 1, message: '关注失败！' })
+            }
+            res.send({ status: 0, message: '关注成功！' })
+        })
+    })
+}
+
+// 用户取消关注
+exports.unfollow = (req, res) => {
+    const sql = `DELETE FROM follows WHERE userid=? AND followedid=?`
+    db.query(sql, [req.auth.userid, req.body.followedid], (err, results) => {
+        if (err) {
+            return res.send({ status: 1, message: err.message })
+        }
+        if (results.affectedRows !== 1) {
+            return res.send({ status: 1, message: '取消关注失败！' })
+        }
+        res.send({ status: 0, message: '取消关注成功！' })
+    })
+}
+
+// 用户认证成为商家 发送图片和号码
+exports.merchant = (req, res) => {
+    merchantUpload.single('licenseImage')(req, res, function (err) {
+        if (err) {
+            return res.send({ status: 1, message: '文件上传失败: ' + err.message });
+        }
+
+        if (!req.file) {
+            return res.send({ status: 1, message: '请上传营业执照图片' });
+        }
+
+        const { licensenumber } = req.body;
+
+        if (!licensenumber) {
+            return res.send({ status: 1, message: '请提供营业执照号码' });
+        }
+
+        // 构建图片访问URL
+        const licenseImageUrl = `${config.server.baseUrl}/images/licenseImage/${req.file.filename}`;
+
+        // 检查用户是否发过请求
+        let sql = `SELECT * FROM verifications WHERE userid = ?`;
+        db.query(sql, [req.auth.userid], (err, results) => {
+            if (err) {
+                return res.send({ status: 1, message: err.message });
+            }
+            if (results.length > 0) {
+                sql = `UPDATE verifications SET licensenumber = ?, licenseImage = ? WHERE userid = ?`;
+                db.query(sql, [licensenumber, licenseImageUrl, req.auth.userid], (err, results) => {
+                    if (err) {
+                        return res.send({ status: 1, message: err.message });
+                    }
+                    if (results.affectedRows !== 1) {
+                        return res.send({ status: 1, message: '更新商家认证信息失败' });
+                    }
+                    return res.send({ status: 0, message: '更新商家认证信息成功' });
+                });
+            }
+        });
+
+        sql = `INSERT INTO verifications (userid, licensenumber, licenseImage) VALUES (?, ?, ?)`;
+        db.query(sql, [req.auth.userid, licensenumber, licenseImageUrl], (err, results) => {
+            if (err) {
+                return res.send({ status: 1, message: err.message });
+            }
+            if (results.affectedRows !== 1) {
+                return res.send({ status: 1, message: '上传商家认证信息失败' });
+            }
+            res.send({ status: 0, message: '上传商家认证信息成功' });
+        });
+    });
 }
