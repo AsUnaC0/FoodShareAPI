@@ -1,10 +1,10 @@
 module.exports = {
-    jwtSecretKey: 'Asuna70',
+    jwtSecretKey: process.env.JWT_SECRET || 'Asuna70',
     server: {
         host: process.env.HOST || 'localhost',
-        port: process.env.PORT || 3007,
+        port: Number(process.env.PORT) || 3007,
         get baseUrl() {
             return `http://${this.host}:${this.port}`;
-        }
-    }
-}
+        },
+    },
+};

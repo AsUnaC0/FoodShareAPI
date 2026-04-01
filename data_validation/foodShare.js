@@ -1,26 +1,14 @@
-const joi = require('joi')
-
-// title的验证规则
-const title = joi.string().required()
-// 食物描述的验证规则
-const description = joi.string().required()
-// 位置的验证规则
-const location = joi.string().required()
-// 食物图片的验证规则
-const foodimg = joi.string().required()
-// 分类的验证规则
-const categoryid = joi.required()
-// 标签的验证规则
-const tags = joi.string()
-
+const joi = require('joi');
 
 exports.add_food_schema = {
     body: {
-        title,
-        description,
-        location,
-        foodimg,
-        categoryid,
-        tags
-    }
-}
+        title: joi.string().trim().max(20).required(),
+        description: joi.string().trim().max(370).required(),
+        location: joi.string().allow('').max(50).default(''),
+        categoryid: joi.alternatives().try(joi.number(), joi.string()).required(),
+        tags: joi.alternatives().try(joi.string(), joi.array().items(joi.string())).optional(),
+        images: joi.alternatives().try(joi.string(), joi.array().items(joi.string())).optional(),
+        videourl: joi.string().allow('', null).optional(),
+        videocover: joi.string().allow('', null).optional(),
+    },
+};

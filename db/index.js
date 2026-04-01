@@ -1,13 +1,18 @@
-// 导入 mysql 模块
-const mysql = require('mysql2')
+const mysql = require('mysql2');
 
-// 创建数据库连接对象
 const db = mysql.createPool({
-    host: '127.0.0.1',
-    user: 'root',
-    password: '20021005',
-    database: 'foodshare',
-})
+    host: process.env.DB_HOST || '127.0.0.1',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '20021005',
+    database: process.env.DB_NAME || 'foodshare',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+});
 
-// 向外共享 db 数据库连接对象
-module.exports = db
+db.promiseQuery = async (sql, params = []) => {
+    const [rows] = await db.promise().query(sql, params);
+    return rows;
+};
+
+module.exports = db;

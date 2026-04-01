@@ -1,101 +1,56 @@
-const db = require('../db/index')
+const db = require('../db');
 
-// 添加标签的处理函数
-exports.addTag = (req, res) => {
-    const { tag_name, type } = req.body
-
-    const sql = `INSERT INTO tags (tag_name, type) VALUES (?, ?)`;
-    db.query(sql, [tag_name, type], (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        res.send({
-            status: 0,
-            message: '添加成功',
-            data: { tagid: results.insertId, tag_name, type }
-        });
-    });
-}
-
-// 获取所有标签的处理函数
-exports.getAllTags = (req, res) => {
-    const sql = `SELECT * FROM tags`;
-    db.query(sql, (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        res.send({
-            status: 0,
-            message: '获取标签成功',
-            data: results
-        });
-    });
-}
-
-// 获取type为tag的美食标签的处理函数
-exports.getFoodTags = (req, res) => {
-    const sql = `SELECT * FROM tags WHERE type = 'tag'`;
-    db.query(sql, (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message });
-        res.send({
-            status: 0,
-            message: '获取美食标签成功',
-            data: results
-        });
-    });
-}
-
-// 删除标签的处理函数
-exports.deleteTag = async (req, res) => {
-    const { tag_id } = req.body;
-
+exports.addTag = async (req, res) => {
     try {
-        // 首先检查标签是否存在且类型为 'tag'
-        const checkResult = await new Promise((resolve, reject) => {
-            const checkSql = `SELECT * FROM tags WHERE tag_id = ? AND type = 'tag'`;
-            db.query(checkSql, [tag_id], (err, results) => {
-                if (err) reject(err);
-                else resolve(results);
-            });
-        });
-
-        if (checkResult.length === 0) {
-            return res.send({
-                status: 1,
-                message: '标签不存在或不是可删除的标签类型'
-            });
-        }
-        // 按正确顺序删除：先删除引用表，再删除主表
-        const deleteOperations = [
-            { sql: 'DELETE FROM user_tags WHERE tagid = ?', name: '用户标签关联' },
-            { sql: 'DELETE FROM food_tags WHERE tag_id = ?', name: '食物标签关联' },
-            { sql: 'DELETE FROM tags WHERE tag_id = ? AND type = "tag"', name: '标签主表' }
-        ];
-
-        // 执行删除操作
-        for (const operation of deleteOperations) {
-            try {
-                const result = await new Promise((resolve, reject) => {
-                    db.query(operation.sql, [tag_id], (err, results) => {
-                        if (err) reject(err);
-                        else resolve(results);
-                    });
-                });
-            } catch (error) {
-                console.error(`删除${operation.name}失败:`, error.message);
-                // 对于引用表的删除失败，可以继续执行
-                if (operation.name === '标签主表') {
-                    throw error; // 主表删除失败则抛出错误
-                }
-            }
+        const { tag_name, type } = req.body;
+        if (!tag_name || !type) {
+            return res.send({ status: 1, message: '标签名和类型不能为空' });
         }
 
-        res.send({
-            status: 0,
-            message: '删除成功'
-        });
+        const exists = await db.promiseQuery('SELECT tag_id FROM tags WHERE tag_name = ? AND type = ? LIMIT 1', [tag_name, type]);
+        if (exists.length) {
+            return res.send({ status: 1, message: '标签已存在', data: exists[0] });
+        }
 
+        const result = await db.promiseQuery('INSERT INTO tags (tag_name, type) VALUES (?, ?)', [tag_name, type]);
+        res.send({ status: 0, message: '添加成功', data: { tagid: result.insertId, tag_name, type } });
     } catch (error) {
-        console.error('删除标签失败:', error);
-        res.send({
-            status: 1,
-            message: '删除失败: ' + error.message
-        });
+        res.send({ status: 1, message: error.message });
     }
-}
+};
+
+exports.getAllTags = async (req, res) => {
+    try {
+        const rows = await db.promiseQuery('SELECT * FROM tags ORDER BY tag_id DESC');
+        res.send({ status: 0, message: '获取标签成功', data: rows });
+    } catch (error) {
+        res.send({ status: 1, message: error.message });
+    }
+};
+
+exports.getFoodTags = async (req, res) => {
+    try {
+        const rows = await db.promiseQuery("SELECT * FROM tags WHERE type = 'tag' ORDER BY tag_id DESC");
+        res.send({ status: 0, message: '获取美食标签成功', data: rows });
+    } catch (error) {
+        res.send({ status: 1, message: error.message });
+    }
+};
+
+exports.deleteTag = async (req, res) => {
+    try {
+        const { tag_id } = req.body;
+        const exists = await db.promiseQuery("SELECT * FROM tags WHERE tag_id = ? AND type = 'tag' LIMIT 1", [tag_id]);
+        if (!exists.length) {
+            return res.send({ status: 1, message: '标签不存在或不允许删除' });
+        }
+
+        await db.promiseQuery('DELETE FROM user_tags WHERE tagid = ?', [tag_id]);
+        await db.promiseQuery('DELETE FROM food_tags WHERE tag_id = ?', [tag_id]);
+        await db.promiseQuery("DELETE FROM tags WHERE tag_id = ? AND type = 'tag'", [tag_id]);
+
+        res.send({ status: 0, message: '删除成功' });
+    } catch (error) {
+        res.send({ status: 1, message: `删除失败: ${error.message}` });
+    }
+};

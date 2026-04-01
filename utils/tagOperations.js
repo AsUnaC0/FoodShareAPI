@@ -1,45 +1,35 @@
-const db = require('../db/index');
+const db = require('../db');
 
-// 根据标签名查询标签ID
-const getTagIdByName = (tagName) => {
-    const sql = `SELECT tag_id FROM tags WHERE tag_name=?`;
-    return new Promise((resolve, reject) => {
-        db.query(sql, tagName, (err, results) => {
-            if (err) {
-                reject(err);
-                return;
-            }
+async function getTagIdByName(tagName) {
+    const rows = await db.promiseQuery('SELECT tag_id FROM tags WHERE tag_name = ?', [tagName]);
+    if (!rows.length) {
+        throw new Error(`标签 "${tagName}" 不存在`);
+    }
 
-            if (!results || results.length === 0) {
-                reject(new Error(`标签 '${tagName}' 不存在`));
-                return;
-            }
+    return {
+        tag_id: rows[0].tag_id,
+        message: `${tagName} 绑定成功`,
+    };
+}
 
-            resolve(
-                {
-                    tag_id: results[0].tag_id,
-                    message: `${tagName}绑定成功`
-                }
-            );
-        });
-    });
-};
+async function getFoodIdsByTagId(tagId) {
+    const rows = await db.promiseQuery('SELECT foodid FROM food_tags WHERE tag_id = ?', [tagId]);
+    return rows.map((item) => item.foodid);
+}
 
-// 根据标签ID获取食物ID
-const getFoodIdsByTagId = (tagId) => {
-    const sql = `SELECT foodid FROM food_tags WHERE tag_id=?`;
-    return new Promise((resolve, reject) => {
-        db.query(sql, tagId, (err, results) => {
-            if (err) {
-                reject(err);
-                return;
-            }
-            resolve(results ? results.map(item => item.foodid) : []);
-        });
-    });
-};
+async function getTagsByFoodId(foodId) {
+    const rows = await db.promiseQuery(
+        `SELECT t.tag_id, t.tag_name, t.type
+         FROM food_tags ft
+         INNER JOIN tags t ON t.tag_id = ft.tag_id
+         WHERE ft.foodid = ?`,
+        [foodId]
+    );
+    return rows;
+}
 
 module.exports = {
     getTagIdByName,
-    getFoodIdsByTagId
+    getFoodIdsByTagId,
+    getTagsByFoodId,
 };

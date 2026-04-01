@@ -1,51 +1,27 @@
-const express = require('express')
-const router = express.Router()
+const express = require('express');
+const expressJoi = require('@escook/express-joi');
+const foodHandler = require('../router_handler/foodHandler');
+const uploadHandler = require('../router_handler/upload');
+const { add_food_schema } = require('../data_validation/foodShare');
 
-const foodHandler = require('../router_handler/foodHandler')
+const router = express.Router();
 
-const uploadHandler = require('../router_handler/upload')
+router.post('/foodlist', foodHandler.getFoodList);
+router.get('/foodlistbytime', foodHandler.getFoodListByTime);
+router.post('/foodlistbyuser', foodHandler.getFoodListByUser);
+router.get('/hotfoodlist', foodHandler.getHotFoodList);
 
-const expressJoi = require('@escook/express-joi')
+// router.post('/upload', uploadHandler.upload);
+router.post('/upload/images', uploadHandler.uploadImages);
+router.post('/upload/video', uploadHandler.uploadVideo);
 
-const { add_food_schema } = require('../data_validation/foodShare')
+router.post('/addfood', expressJoi(add_food_schema), foodHandler.addFood);
+router.post('/deletefood', foodHandler.deleteFood);
+router.post('/likefood', foodHandler.likeFood);
+router.post('/unlikefood', foodHandler.unlikeFood);
+router.post('/favoritefood', foodHandler.favoritefood);
+router.post('/unfavoritefood', foodHandler.unfavoritefood);
+router.post('/commentfood', foodHandler.commentfood);
+router.post('/searchfood', foodHandler.searchFood);
 
-// 获取美食列表 不需要验证token
-router.post('/foodlist', foodHandler.getFoodList)
-
-// 按时间段获取美食列表
-router.get('/foodlistbytime', foodHandler.getFoodListByTime)
-
-// 个性化推荐食物列表
-router.post('/foodlistbyuser', foodHandler.getFoodListByUser)
-
-// 热门推荐食物列表
-router.get('/hotfoodlist', foodHandler.getHotFoodList)
-
-// 美食图片的发送
-router.post('/upload', uploadHandler.upload)
-
-// 用户发布美食信息
-router.post('/addfood', expressJoi(add_food_schema), foodHandler.addFood)
-
-// 用户删除贴子
-router.post('/deletefood', foodHandler.deleteFood)
-
-// 用户对该食物贴子进行点赞
-router.post('/likefood', foodHandler.likeFood)
-
-// 用户对该食物贴子取消点赞
-router.post('/unlikefood', foodHandler.unlikeFood)
-
-// 用户对该食物贴子收藏
-router.post('/favoritefood', foodHandler.favoritefood)
-
-// 用户对该食物贴子取消收藏
-router.post('/unfavoritefood', foodHandler.unfavoritefood)
-
-// 用户对该食物贴子进行评论
-router.post('/commentfood', foodHandler.commentfood)
-
-// 用户搜索美食
-router.post('/searchfood', foodHandler.searchFood)
-
-module.exports = router
+module.exports = router;

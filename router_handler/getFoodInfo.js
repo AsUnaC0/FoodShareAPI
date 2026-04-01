@@ -1,44 +1,60 @@
-const db = require('../db/index')
+const db = require('../db');
+const { getTagsByFoodId } = require('../utils/tagOperations');
 
-// 根据id获取用户信息
-exports.getFoodUser = (req, res) => {
-    const sql = `SELECT * FROM users WHERE userid=?`
-    db.query(sql, req.query.userid, (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message })
-        if (results.length !== 1) return res.send({ status: 1, message: '用户不存在！' })
+exports.getFoodUser = async (req, res) => {
+    try {
+        const rows = await db.promiseQuery(
+            'SELECT userid, account, nickname, email, avatar, user_type, account_status FROM users WHERE userid = ? LIMIT 1',
+            [req.query.userid]
+        );
+
+        if (!rows.length) {
+            return res.send({ status: 1, message: '用户不存在' });
+        }
+
+        res.send({ status: 0, message: '获取用户信息成功', data: rows[0] });
+    } catch (error) {
+        res.send({ status: 1, message: error.message });
+    }
+};
+
+exports.getFoodComment = async (req, res) => {
+    try {
+        const rows = await db.promiseQuery(
+            `SELECT c.*, u.nickname, u.avatar
+             FROM comments c
+             LEFT JOIN users u ON u.userid = c.userid
+             WHERE c.foodid = ?
+             ORDER BY c.createdtime DESC`,
+            [req.query.foodid]
+        );
+
+        res.send({ status: 0, message: '获取美食评论信息成功', data: rows });
+    } catch (error) {
+        res.send({ status: 1, message: error.message });
+    }
+};
+
+exports.getFoodLike = async (req, res) => {
+    try {
+        const rows = await db.promiseQuery(
+            `SELECT
+                (SELECT COUNT(*) FROM favorites WHERE foodid = ?) AS favoriteCount,
+                (SELECT COUNT(*) FROM likes WHERE foodid = ?) AS likeCount,
+                (SELECT COUNT(*) FROM comments WHERE foodid = ?) AS commentCount`,
+            [req.query.foodid, req.query.foodid, req.query.foodid]
+        );
+
+        const tags = await getTagsByFoodId(req.query.foodid).catch(() => []);
         res.send({
             status: 0,
-            message: '获取用户信息成功！',
-            data: results[0]
-        })
-    })
-}
-
-// 根据食物id获取该食物的评论信息
-exports.getFoodComment = (req, res) => {
-    const sql = `SELECT * FROM comments WHERE foodid=?`
-    db.query(sql, req.query.foodid, (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message })
-        res.send({
-            status: 0,
-            message: '获取食物评论信息成功！',
-            data: results
-        })
-    })
-}
-
-// 根据食物id获取该食物的点赞量和收藏量
-exports.getFoodLike = (req, res) => {
-    const sql = `SELECT 
-        (SELECT COUNT(*) FROM favorites WHERE foodid = ${req.query.foodid}) AS user_favorites_count,
-        (SELECT COUNT(*) FROM likes WHERE foodid = ${req.query.foodid}) AS user_likes_count`
-
-    db.query(sql, (err, results) => {
-        if (err) return res.send({ status: 1, message: err.message })
-        res.send({
-            status: 0,
-            message: '获取食物点赞量和收藏量成功！',
-            data: results[0]
-        })
-    })
-}
+            message: '获取美食互动信息成功',
+            data: {
+                ...(rows[0] || { favoriteCount: 0, likeCount: 0, commentCount: 0 }),
+                tags,
+            },
+        });
+    } catch (error) {
+        res.send({ status: 1, message: error.message });
+    }
+};
