@@ -7,7 +7,6 @@ const { toImageUrl } = require('../utils/fileStorage');
 exports.regUser = async (req, res) => {
     try {
         const { account, password, email } = req.body;
-        console.log('Received registration data:', { account, email });
         const rows = await db.promiseQuery('SELECT userid FROM users WHERE account = ? LIMIT 1', [account]);
 
         if (rows.length) {

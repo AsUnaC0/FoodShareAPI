@@ -8,13 +8,20 @@ const { ensureDir } = require('./utils/fileStorage');
 
 const app = express();
 
+// 启动时确保 images 目录存在，如果不存在则创建
 ensureDir(path.join(__dirname, 'images'));
 
+// 启用跨域请求支持
 app.use(cors());
+
+// 解析请求体（URL编码和JSON格式）
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+// 将 images 目录设为静态文件目录，外部可访问图片
 app.use('/images', express.static(path.join(__dirname, 'images')));
 
+//验证所有请求的JWT token，但排除掉部分不需要登录的接口，只接受使用 HS256 算法签名的 token，其他一律拒绝
 app.use(
     expressjwt({ secret: config.jwtSecretKey, algorithms: ['HS256'] }).unless({
         path: [
@@ -36,11 +43,13 @@ app.use('/fooddetail', require('./router/fooddetail'));
 app.use('/tag', require('./router/tag'));
 app.use('/admin', require('./router/admin'));
 
+// 启动所有定时任务
 const { startAllTasks } = require('./tasks');
 startAllTasks();
 
+// 错误处理中间件
 app.use((err, req, res, next) => {
-    if (err instanceof joi.ValidationError) {
+    if (err instanceof joi.ValidationError) { //Joi验证错误
         return res.status(400).send({ status: 1, message: err.message });
     }
 
